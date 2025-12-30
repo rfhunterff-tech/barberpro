@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barber Pro - Gestão de Caixa com Edição</title>
+    <style>
+        :root { --gold: #d4af37; --dark: #121212; --card: #1e1e1e; --white: #e0e0e0; --red: #ff5f5f; --green: #4caf50; --blue: #3498db; }
+        body { font-family: 'Segoe UI', sans-serif; background-color: var(--dark); color: var(--white); padding: 15px; margin: 0; }
+        .container { max-width: 600px; margin: auto; }
+        .card { background: var(--card); padding: 20px; border-radius: 12px; border: 1px solid #333; margin-bottom: 20px; }
+        h2, h3 { color: var(--gold); text-align: center; margin-top: 0; }
+        
+        label { display: block; margin-bottom: 5px; font-size: 0.85em; color: #aaa; }
+        input, select, button { width: 100%; padding: 12px; margin-bottom: 12px; border-radius: 8px; border: 1px solid #444; background: #2a2a2a; color: white; box-sizing: border-box; }
+        
+        .btn-add { background: var(--gold); color: black; font-weight: bold; border: none; cursor: pointer; }
+        .btn-close { background: var(--green); color: white; font-weight: bold; border: none; cursor: pointer; margin-top: 10px; }
+        .btn-out { background: transparent; color: var(--red); border: 1px solid var(--red); cursor: pointer; }
+        .btn-edit { background: var(--blue); color: white; border: none; padding: 5px 10px; border-radius: 4px; cursor: pointer; font-size: 0.8em; margin-top: 5px; width: auto; }
+        
+        .grid-resumo { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+        .resumo-item { background: #252525; padding: 15px; border-radius: 8px; border-bottom: 3px solid var(--gold); }
+        .resumo-item span { display: block; font-size: 0.8em; color: #888; }
+        .resumo-item strong { font-size: 1.1em; }
+
+        .historico-vendas { max-height: 150px; overflow-y: auto; background: #1a1a1a; padding: 10px; border-radius: 8px; font-size: 0.85em; }
+        .item-log { display: flex; justify-content: space-between; padding: 5px 0; border-bottom: 1px solid #333; }
+        
+        .registro-dia { background: #252525; padding: 10px; border-radius: 8px; margin-bottom: 10px; border-left: 4px solid var(--gold); font-size: 0.9em; position: relative; }
+        .saida { color: var(--red); }
+
+        /* Estilo do Modal de Edição */
+        #modal-edicao { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); z-index: 100; align-items: center; justify-content: center; }
+        .modal-content { background: var(--card); padding: 20px; border-radius: 12px; width: 90%; max-width: 400px; border: 1px solid var(--gold); }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>BARBER PRO ✂️</h2>
+
+    <div class="card">
+        <h3>Lançar Serviço</h3>
+        <label>Barbeiro</label>
+        <select id="barbeiro">
+            <option value="Proprietário">Proprietário</option>
+            <option value="Felipe">Felipe</option>
+            <option value="Lucas">Lucas</option>
+            <option value="Tom Oliver">Tom Oliver</option>
+            <option value="Junior">Junior</option>
+        </select>
+
+        <label>Valor (R$)</label>
+        <input type="number" id="valor" placeholder="0.00" step="0.01">
+
+        <label>Pagamento</label>
+        <select id="metodo">
+            <option value="Dinheiro">Dinheiro</option>
+            <option value="Pix">Pix</option>
+            <option value="Cartão">Cartão</option>
+        </select>
+
+        <button class="btn-add" onclick="registrar(true)">Lançar Entrada</button>
+        <button class="btn-out" onclick="registrar(false)">Lançar Saída (Gasto)</button>
+    </div>
+
+    <div class="grid-resumo">
+        <div class="resumo-item"><span>Total Bruto</span><strong id="total-bruto">R$ 0,00</strong></div>
+        <div class="resumo-item"><span>Comissões</span><strong id="total-comissao">R$ 0,00</strong></div>
+        <div class="resumo-item"><span>Gastos</span><strong id="total-saidas" style="color:var(--red)">R$ 0,00</strong></div>
+        <div class="resumo-item"><span>Líquido</span><strong id="total-liquido" style="color:var(--green)">R$ 0,00</strong></div>
+    </div>
+
+    <div class="card">
+        <h3>Vendas de Agora</h3>
+        <div id="historico-vendas" class="historico-vendas"></div>
+        <button class="btn-close" onclick="fecharDia()">FECHAR DIA E SALVAR</button>
+    </div>
+
+    <div class="card">
+        <h3>Histórico de Dias Anteriores</h3>
+        <div id="log-dias"></div>
+        <button style="background:#333; font-size: 0.7em; margin-top:10px; cursor:pointer;" onclick="apagarTudo()">Limpar Tudo</button>
+    </div>
+</div>
+
+<div id="modal-edicao">
+    <div class="modal-content">
+        <h3>Editar Registo</h3>
+        <input type="hidden" id="edit-index">
+        <label>Data</label>
+        <input type="text" id="edit-data">
+        <label>Total Bruto (R$)</label>
+        <input type="number" id="edit-bruto" step="0.01">
+        <label>Comissão (R$)</label>
+        <input type="number" id="edit-comissao" step="0.01">
+        <label>Saídas (R$)</label>
+        <input type="number" id="edit-saidas" step="0.01">
+        
+        <button class="btn-add" onclick="salvarEdicao()">Gravar Alterações</button>
+        <button class="btn-out" onclick="fecharModal()">Cancelar</button>
+    </div>
+</div>
+
+<script>
+    let caixaAtual = JSON.parse(localStorage.getItem('caixaAtual')) || { vendas: [], bruto: 0, comissao: 0, saidas: 0 };
+    let historicoDias = JSON.parse(localStorage.getItem('historicoDias')) || [];
+
+    function registrar(isEntrada) {
+        const valor = parseFloat(document.getElementById('valor').value);
+        const barbeiro = document.getElementById('barbeiro').value;
+        const metodo = document.getElementById('metodo').value;
+
+        if (!valor || valor <= 0) return alert("Valor inválido");
+
+        const hora = new Date().toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+        if (isEntrada) {
+            caixaAtual.bruto += valor;
+            let valorComissao = (barbeiro !== "Proprietário") ? (valor * 0.5) : 0;
+            caixaAtual.comissao += valorComissao;
+            caixaAtual.vendas.push({ desc: `${barbeiro} (${metodo})`, valor, hora, tipo: 'entrada' });
+        } else {
+            caixaAtual.saidas += valor;
+            caixaAtual.vendas.push({ desc: `GASTO/SAÍDA`, valor, hora, tipo: 'saida' });
+        }
+
+        document.getElementById('valor').value = "";
+        salvarEAtualizar();
+    }
+
+    function fecharDia() {
+        if (caixaAtual.vendas.length === 0) return alert("Não há vendas para fechar o dia.");
+        
+        if (confirm("Deseja encerrar o caixa de hoje? Os dados serão movidos para o histórico.")) {
+            const data = new Date().toLocaleDateString();
+            const resumoDia = {
+                data: data,
+                bruto: caixaAtual.bruto,
+                comissao: caixaAtual.comissao,
+                saidas: caixaAtual.saidas,
+                liquido: caixaAtual.bruto - caixaAtual.comissao - caixaAtual.saidas
+            };
+
+            historicoDias.unshift(resumoDia);
+            localStorage.setItem('historicoDias', JSON.stringify(historicoDias));
+
+            caixaAtual = { vendas: [], bruto: 0, comissao: 0, saidas: 0 };
+            salvarEAtualizar();
+            renderizarHistoricoDias();
+        }
+    }
+
+    function salvarEAtualizar() {
+        localStorage.setItem('caixaAtual', JSON.stringify(caixaAtual));
+        
+        document.getElementById('total-bruto').innerText = `R$ ${caixaAtual.bruto.toFixed(2)}`;
+        document.getElementById('total-comissao').innerText = `R$ ${caixaAtual.comissao.toFixed(2)}`;
+        document.getElementById('total-saidas').innerText = `R$ ${caixaAtual.saidas.toFixed(2)}`;
+        document.getElementById('total-liquido').innerText = `R$ ${(caixaAtual.bruto - caixaAtual.comissao - caixaAtual.saidas).toFixed(2)}`;
+
+        const lista = document.getElementById('historico-vendas');
+        lista.innerHTML = "";
+        caixaAtual.vendas.slice().reverse().forEach(v => {
+            lista.innerHTML += `<div class="item-log ${v.tipo === 'saida' ? 'saida' : ''}">
+                <span>${v.hora} - ${v.desc}</span>
+                <strong>R$ ${v.valor.toFixed(2)}</strong>
+            </div>`;
+        });
+    }
+
+    function renderizarHistoricoDias() {
+        const container = document.getElementById('log-dias');
+        container.innerHTML = historicoDias.length === 0 ? "<p style='text-align:center; color:#666'>Nenhum dia registrado.</p>" : "";
+        
+        historicoDias.forEach((dia, index) => {
+            container.innerHTML += `
+                <div class="registro-dia">
+                    <strong>📅 Dia: ${dia.data}</strong><br>
+                    Total Bruto: R$ ${dia.bruto.toFixed(2)} | Comissão: R$ ${dia.comissao.toFixed(2)}<br>
+                    Saídas: R$ ${dia.saidas.toFixed(2)} | <span style="color:var(--green)">Líquido: R$ ${dia.liquido.toFixed(2)}</span><br>
+                    <button class="btn-edit" onclick="abrirEdicao(${index})">Editar Valores</button>
+                </div>`;
+        });
+    }
+
+    // --- FUNÇÕES DE EDIÇÃO ---
+    function abrirEdicao(index) {
+        const dia = historicoDias[index];
+        document.getElementById('edit-index').value = index;
+        document.getElementById('edit-data').value = dia.data;
+        document.getElementById('edit-bruto').value = dia.bruto;
+        document.getElementById('edit-comissao').value = dia.comissao;
+        document.getElementById('edit-saidas').value = dia.saidas;
+        document.getElementById('modal-edicao').style.display = 'flex';
+    }
+
+    function fecharModal() {
+        document.getElementById('modal-edicao').style.display = 'none';
+    }
+
+    function salvarEdicao() {
+        const index = document.getElementById('edit-index').value;
+        const bruto = parseFloat(document.getElementById('edit-bruto').value);
+        const comissao = parseFloat(document.getElementById('edit-comissao').value);
+        const saidas = parseFloat(document.getElementById('edit-saidas').value);
+        const data = document.getElementById('edit-data').value;
+
+        if (isNaN(bruto) || isNaN(comissao) || isNaN(saidas)) return alert("Valores inválidos");
+
+        historicoDias[index] = {
+            data: data,
+            bruto: bruto,
+            comissao: comissao,
+            saidas: saidas,
+            liquido: bruto - comissao - saidas
+        };
+
+        localStorage.setItem('historicoDias', JSON.stringify(historicoDias));
+        fecharModal();
+        renderizarHistoricoDias();
+    }
+
+    function apagarTudo() {
+        if(confirm("Isso apagará TODO o seu histórico de dias salvos. Tem certeza?")) {
+            localStorage.clear();
+            location.reload();
+        }
+    }
+
+    salvarEAtualizar();
+    renderizarHistoricoDias();
+</script>
+
+</body>
+</html>
